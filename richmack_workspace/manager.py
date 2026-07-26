@@ -4,7 +4,6 @@ import json
 import os
 import shutil
 import subprocess
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -19,6 +18,36 @@ class AppStatus:
     version: str | None = None
     entrypoint: str | None = None
     venv_dir: Path | None = None
+
+
+def find_compatible_python() -> str:
+    """Return a Python 3.11+ interpreter for managed applications."""
+    candidates = ("python3.12", "python3.11", "python3")
+
+    for candidate in candidates:
+        executable = shutil.which(candidate)
+        if not executable:
+            continue
+
+        result = subprocess.run(
+            [
+                executable,
+                "-c",
+                "import sys; print(sys.version_info >= (3, 11))",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        if result.returncode == 0 and result.stdout.strip() == "True":
+            return executable
+
+    raise RuntimeError(
+        "Richmack Workspace requires Python 3.11 or newer. "
+        "Install Python 3.11+ and try again."
+    )
 
 
 class WorkspaceManager:
@@ -116,7 +145,7 @@ print(json.dumps({
         app_dir.mkdir(parents=True, exist_ok=True)
 
         if not self.python_path(app).exists():
-            self._run_logged(app, [sys.executable, "-m", "venv", str(venv)])
+            self._run_logged(app, [find_compatible_python(), "-m", "venv", str(venv)])
 
         python = self.python_path(app)
         self._run_logged(
